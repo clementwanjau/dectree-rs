@@ -10,7 +10,7 @@ The decision tree uses a lot of RAM but is very fast.
 
 Example:
 ```rust
-use dectree::DecisionTree;
+use dectree::SignatureDecisionTree;
 
 fn main() {
 	let signature_base = vec![0x55, 0xe9, 0xd8, 0x01, 0xfe, 0xff, 0x32, 0x77, 0x89, 0x4f, 0x55];

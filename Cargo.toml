@@ -1,8 +1,10 @@
 [package]
 name = "dectree-rs"
+description = "A decision tree implementation in Rust"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
+authors = ["Clement Wanjau <clementwanjau@gmail.com>"]
+readme = "readme.md"
+repository = "https://github.com/clementwanjau/dectree-rs"
+license-file = "LICENSE"
+keywords = ["decision-tree", "bytes-signatures"]
