@@ -1,15 +1,16 @@
-use std::cell::RefCell;
-use std::clone;
 #[doc = include_str!("../readme.md")]
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+
+pub type RcRefCellTreeNode<T> = Rc<RefCell<TreeNode<T>>>;
 
 #[derive(Clone, Debug)]
 pub struct TreeNode<T> where T: Clone + Default {
 	depth: i32,
 	subtree_signatures: Vec<SignatureInfo<T>>,
-	choices:Vec<Option<TreeNode<T>>>,
+	choices:Vec<Option<RcRefCellTreeNode<T>>>,
 	term: Vec<SignatureInfo<T>>,
 }
 
@@ -33,7 +34,7 @@ pub struct SignatureInfo<T> where T: Clone + Default {
 
 #[derive(Clone, Debug, Default)]
 pub struct SignatureDecisionTree<T> where T: Clone + Default {
-	base_node: Rc<RefCell<TreeNode<T>>>,
+	base_node: RcRefCellTreeNode<T>,
 	sigs_dup: HashMap<Vec<u8>, bool>
 }
 
@@ -46,56 +47,77 @@ impl<T> SignatureDecisionTree<T> where T: Clone + Default {
 		let mut node_info_list = vec![(tree_node, signature_info)];
 		// Workaround to avoid recursion
 		while let Some((node, sig_info)) = node_info_list.pop() {
-			let mut node = node.borrow_mut();
-			let (depth, mut sigs, choices, mut term) = (node.depth, node.subtree_signatures.clone(), node.choices.clone(), node.term.clone());
+			let mut borrowed_node = node.borrow_mut();
+			let (depth, mut sigs, choices, mut term) = (borrowed_node.depth, borrowed_node.subtree_signatures.clone(), borrowed_node.choices.clone(), borrowed_node.term.clone());
 			let (bytes, _, _) = (&sig_info.bytes, &sig_info.masks, &sig_info.object);
 			let siglen = sigs.len();
 			if bytes.len() as i32 > depth {
 				sigs.push(sig_info.clone());
-				// FIXME: Apparently not able to set the signatures here for some reason.
-				node.subtree_signatures = sigs.clone();
+				*borrowed_node = TreeNode {
+					depth: borrowed_node.depth,
+					subtree_signatures: sigs.clone(),
+					choices: borrowed_node.choices.clone(),
+					term: borrowed_node.term.clone()
+				};
 			} else {
 				term.push(sig_info.clone());
-				node.term = term;
+				*borrowed_node = TreeNode {
+					depth: borrowed_node.depth,
+					subtree_signatures: borrowed_node.subtree_signatures.clone(),
+					choices: borrowed_node.choices.clone(),
+					term
+				};
 				continue;
 			}
+			let choices = Rc::new(RefCell::new(choices));
 			// If one sig is [85, 139, 236] and another is [85, 139, 236, 232, 144], then
 			// we're gonna panic without this check
 			if siglen == 0 {
-				// we just don't want the "else" here, if we're the only
-				// one on this node, just let it ride.
-				continue
+				// If it has no sigs, we need to add a level
+				// modify the next node
+				continue;
 			} else if siglen == 1 {
 				// If it has one already, we *both* need to add another level
 				// (because if it is the only one, it thought it was last choice)
 				for sig in sigs.iter() {
 					let ch_val = sig.bytes[depth as usize];
-					let (choices, nn_node) = self.get_node(depth, choices.clone(), ch_val as i32);
-					node.choices = choices;
+					let nn_node = self.get_node(depth, choices.clone(), ch_val as i32);
+					*borrowed_node = TreeNode {
+						depth: borrowed_node.depth,
+						subtree_signatures: borrowed_node.subtree_signatures.clone(),
+						choices: choices.borrow().clone(),
+						term: borrowed_node.term.clone()
+					};
 					node_info_list.push((nn_node, sig.clone()));
 				}
 			} else {
 				// This is already a choice node, keep on choosing...
 				let ch_val = bytes[depth as usize];
-				let (choices, nn_node) = self.get_node(depth, choices.clone(), ch_val as i32);
-				node.choices = choices;
+				let nn_node = self.get_node(depth, choices.clone(), ch_val as i32);
+				*borrowed_node = TreeNode {
+					depth: borrowed_node.depth,
+					subtree_signatures: borrowed_node.subtree_signatures.clone(),
+					choices: choices.borrow().clone(),
+					term: borrowed_node.term.clone()
+				};
 				node_info_list.push((nn_node, sig_info));
 			}
 		}
 	}
 
 	/// Chose, (and or initialize) a sub node.
-	fn get_node(&self, depth: i32, mut choices: Vec<Option<TreeNode<T>>>, choice: i32) -> (Vec<Option<TreeNode<T>>>, Rc<RefCell<TreeNode<T>>>) {
-		let nn_node = choices[choice as usize].clone();
+	fn get_node(&self, depth: i32, choices: Rc<RefCell<Vec<Option<RcRefCellTreeNode<T>>>>>, choice: i32) -> RcRefCellTreeNode<T> {
+		let mut borrowed_choices = choices.borrow_mut();
+		let nn_node = borrowed_choices[choice as usize].clone();
 		if nn_node.is_none() {
 			let nn_node = TreeNode{
 				depth: depth + 1,
 				..Default::default()
 			};
-			choices[choice as usize] = Some(nn_node);
+			borrowed_choices[choice as usize] = Some(Rc::new(RefCell::new(nn_node)));
 		}
-		let nn_node = choices[choice as usize].clone().unwrap();
-		(choices, Rc::new(RefCell::new(nn_node)))
+		let nn_node = borrowed_choices[choice as usize].as_ref().unwrap();
+		nn_node.clone()
 	}
 
 	/// Add a signature to the search tree.  If masks goes unspecified, it will be
@@ -167,10 +189,7 @@ impl<T> SignatureDecisionTree<T> where T: Clone + Default {
 					let masked = bytes[(offset + *depth) as usize] & smasks[*depth as usize];
 					if masked == sbytes[*depth as usize] {
 						// FIXME: Find the *best* winner! Because of masking.
-						let choice_node = choices[masked as usize].clone();
-						nn_node = choice_node.map(|x| {
-							Rc::new(RefCell::new(x))
-						});
+						nn_node = choices[masked as usize].clone();
 						break
 					}
 				}
