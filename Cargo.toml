@@ -1,10 +1,11 @@
 [package]
 name = "dectree-rs"
 description = "A decision tree implementation in Rust"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Clement Wanjau <clementwanjau@gmail.com>"]
 readme = "readme.md"
 repository = "https://github.com/clementwanjau/dectree-rs"
+license = "Apache-2.0"
 license-file = "LICENSE"
 keywords = ["decision-tree", "bytes-signatures"]

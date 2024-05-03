@@ -1,7 +1,6 @@
 ## Signature Decision Tree
 
-[![Crates.io](https://img.shields.io/crates/v/dectree-rs)](https://crates.io/crates/dectree-rs)
-
+[![Latest Release](https://img.shields.io/crates/v/dectree-rs)](https://crates.io/crates/dectree-rs)
 [![Build](https://github.com/clementwanjau/dectree-rs/actions/workflows/build.yml/badge.svg)](https://github.com/clementwanjau/dectree-rs/actions/workflows/build.yml)
 
 A byte and mask based decision engine for creating byte
@@ -16,7 +15,7 @@ Features:
 ### Usage
 ```toml
 [dependencies]
-dectree-rs = "0.1.0"
+dectree-rs = "0.1.1"
 ```
 
 Example:
@@ -41,7 +40,7 @@ fn main() {
 ```
 
 ### License
-This project is licensed under the GNU GPL v3.0 License - see the [LICENSE](LICENSE) file for details
+This project is licensed under the `Apache License 2.0` - see the [LICENSE](LICENSE) file for details
 
 
 ### Authors
