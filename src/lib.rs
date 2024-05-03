@@ -49,7 +49,7 @@ impl<T> SignatureDecisionTree<T> where T: Clone + Default {
 		while let Some((node, sig_info)) = node_info_list.pop() {
 			let mut borrowed_node = node.borrow_mut();
 			let (depth, mut sigs, choices, mut term) = (borrowed_node.depth, borrowed_node.subtree_signatures.clone(), borrowed_node.choices.clone(), borrowed_node.term.clone());
-			let (bytes, _, _) = (&sig_info.bytes, &sig_info.masks, &sig_info.object);
+			let bytes = &sig_info.bytes;
 			let siglen = sigs.len();
 			if bytes.len() as i32 > depth {
 				sigs.push(sig_info.clone());
@@ -158,19 +158,19 @@ impl<T> SignatureDecisionTree<T> where T: Clone + Default {
 				// Once we get down to one sig, there are no more branches,
 				// just check the byte sequence.
 				if sigs.len() == 1 {
-					let (sbytes, smasks, _) = (&sigs[0].bytes, &sigs[0].masks, &sigs[0].object);
+					let (sbytes, smasks) = (&sigs[0].bytes, &sigs[0].masks);
 					let mut is_match = true;
 					for i in (*depth as usize)..sbytes.len() {
 						let real_off = offset + i as i32;
 						// We still have pieces of the signature left, but we're out of bytes
 						if real_off >= bytes.len() as i32 {
 							is_match = false;
-							break
+							break;
 						}
 						let masked = bytes[real_off as usize] & smasks[i];
 						if masked != sbytes[i] {
 							is_match = false;
-							break
+							break;
 						}
 					}
 					if is_match {
@@ -181,7 +181,7 @@ impl<T> SignatureDecisionTree<T> where T: Clone + Default {
 				// There are still more choices to make, keep on truckin'
 				nn_node = None;
 				for sig in sigs.iter() {
-					let (sbytes, smasks, _) = (&sig.bytes, &sig.masks, &sig.object);
+					let (sbytes, smasks) = (&sig.bytes, &sig.masks);
 					if (offset + *depth) >= bytes.len() as i32 {
 						continue
 					}
@@ -189,7 +189,7 @@ impl<T> SignatureDecisionTree<T> where T: Clone + Default {
 					let masked = bytes[(offset + *depth) as usize] & smasks[*depth as usize];
 					if masked == sbytes[*depth as usize] {
 						// FIXME: Find the *best* winner! Because of masking.
-						nn_node = choices[masked as usize].clone();
+						nn_node = choices[masked as usize].as_ref().map(Rc::clone);
 						break
 					}
 				}
@@ -202,7 +202,7 @@ impl<T> SignatureDecisionTree<T> where T: Clone + Default {
 		return if matches.is_empty() {
 			None
 		} else {
-			matches.sort_by(|a, b| a.bytes.len().cmp(&b.bytes.len()));
+			matches.sort_by(|a, b| b.bytes.len().cmp(&a.bytes.len()));
 			matches.first().map(|x| x.object.clone())
 		}
 	}
@@ -215,7 +215,6 @@ mod tests {
 		let signature_base = vec![0x55, 0xe9, 0xd8, 0x01, 0xfe, 0xff, 0x32, 0x77, 0x89, 0x4f, 0x55];
 		let mut tree = super::SignatureDecisionTree::new();
 		tree.add_signature(signature_base.clone(), None, None);
-		tree.get_signature(vec![0x55, 0xe9], None);
 		tree.add_signature(signature_base.clone().into_iter().take(7).collect(), None, Some(signature_base.clone().into_iter().take(7).collect()));
 		tree.add_signature(signature_base.clone().into_iter().take(4).collect(), None, Some(signature_base.clone().into_iter().take(4).collect()));
 		tree.add_signature([signature_base.clone(), vec![0xfe, 0x38]].concat(), None, Some([signature_base.clone(), vec![0xfe, 0x38]].concat()));
