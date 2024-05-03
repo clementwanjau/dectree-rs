@@ -4,13 +4,22 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-pub type RcRefCellTreeNode<T> = Rc<RefCell<TreeNode<T>>>;
+/// Represents a reference counted reference to a `RefCell<TreeNode<T>>`. This is used for nodes that 
+/// need to be mutated but are shared between multiple references.
 
+type RcRefCellTreeNode<T> = Rc<RefCell<TreeNode<T>>>;
+
+/// Represents a node in the decision tree. This is a recursive structure that can be used to represent
+/// a decision tree where each node is a choice and the leaf nodes are the final decision.
 #[derive(Clone, Debug)]
-pub struct TreeNode<T> where T: Clone + Default {
+struct TreeNode<T> where T: Clone + Default {
+	/// The depth of the node in the tree.
 	depth: i32,
+	/// The signatures that are valid at this node.
 	subtree_signatures: Vec<SignatureInfo<T>>,
+	/// The choices that can be made at this node.
 	choices:Vec<Option<RcRefCellTreeNode<T>>>,
+	/// The final decision at this node.
 	term: Vec<SignatureInfo<T>>,
 }
 
@@ -25,13 +34,30 @@ impl<T> Default for TreeNode<T> where T: Clone + Default {
 	}
 }
 
+/// Represents signature information. This is used to store the signature bytes, masks, and the object
+/// that is associated with the signature.
 #[derive(Clone, Debug)]
-pub struct SignatureInfo<T> where T: Clone + Default {
+struct SignatureInfo<T> where T: Clone + Default {
 	bytes: Vec<u8>,
 	masks: Vec<u8>,
 	object: T
 }
 
+/// Represents a decision tree that can be used to search for signatures. This is a tree structure that
+/// can be used to search for signatures in a binary blob. The tree is built by adding signatures to the
+/// tree and then searching for them.
+/// ```rust
+/// use dectree_rs::SignatureDecisionTree;
+/// 
+/// let mut tree = SignatureDecisionTree::new();
+/// tree.add_signature(vec![0x55, 0xe9, 0xd8, 0x01, 0xfe, 0xff, 0x32, 0x77, 0x89, 0x4f, 0x55], None, None);
+/// tree.add_signature(vec![0x55, 0xe9, 0xd8, 0x01, 0xfe, 0xff, 0x32], None, None);
+/// tree.add_signature(vec![0x55, 0xe9, 0xd8, 0x01, 0xfe, 0x00], None, None);
+/// assert_eq!(tree.get_signature(vec![0x55, 0xe9, 0xd8, 0x01, 0xfe, 0xff, 0x32, 0x00, 0x99, 0x36, 0x5f, 0x21, 0xfd], None), Some(()));
+/// assert_eq!(tree.get_signature(vec![0x55, 0xe9, 0xd8, 0x01, 0xfe, 0xff, 0x32], None), Some(()));
+/// assert_eq!(tree.get_signature(vec![0x55, 0xe9, 0xd8, 0x01, 0xfe, 0x00], None), Some(()));
+/// assert_eq!(tree.get_signature(vec![0x55], None), None);
+/// ```
 #[derive(Clone, Debug, Default)]
 pub struct SignatureDecisionTree<T> where T: Clone + Default {
 	base_node: RcRefCellTreeNode<T>,
@@ -39,10 +65,13 @@ pub struct SignatureDecisionTree<T> where T: Clone + Default {
 }
 
 impl<T> SignatureDecisionTree<T> where T: Clone + Default {
+	
+	/// Create a new `SignatureDecisionTree`.
 	pub fn new() -> Self {
 		SignatureDecisionTree::default()
 	}
 
+	/// Add a choice to the search tree.
 	fn add_choice(&mut self, signature_info: SignatureInfo<T>, tree_node: Rc<RefCell<TreeNode<T>>>) {
 		let mut node_info_list = vec![(tree_node, signature_info)];
 		// Workaround to avoid recursion
@@ -121,10 +150,10 @@ impl<T> SignatureDecisionTree<T> where T: Clone + Default {
 	}
 
 	/// Add a signature to the search tree.  If masks goes unspecified, it will be
-	/// assumed to be all ones (\\xff * len(bytes)).
+	/// assumed to be all ones `vec![0xff; bytes.len()]`.
 	/// 
-	/// Additionally, you may specify "val" as the object to get back with
-	/// getSignature().
+	/// Additionally, you may specify `val` as the object to get back with
+	/// `tree.get_signature()`.
 	pub fn add_signature(&mut self, bytes: Vec<u8>, masks: Option<Vec<u8>>, val: Option<T>) {
 		let masks = masks.unwrap_or(vec![0xff; bytes.len()]);
 		let val = val.unwrap_or_default();
@@ -142,10 +171,12 @@ impl<T> SignatureDecisionTree<T> where T: Clone + Default {
 		self.add_choice(sig_info, Rc::clone(&self.base_node));
 	}
 
+	/// Check if a signature is in the search tree.
 	pub fn is_signature(&self, bytes: Vec<u8>, offset: Option<i32>) -> bool {
 		self.get_signature(bytes, offset).is_some()
 	}
 
+	/// Get the object associated with a signature in the search tree.
 	pub fn get_signature(&self, bytes: Vec<u8>, offset: Option<i32>) -> Option<T> {
 		let offset = offset.unwrap_or_default();
 		let mut matches = vec![];
